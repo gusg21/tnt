@@ -1,0 +1,12 @@
+set(TNTIncludes 
+	${CMAKE_CURRENT_SOURCE_DIR}/app.h
+	${CMAKE_CURRENT_SOURCE_DIR}/tnt_data.h
+	${CMAKE_CURRENT_SOURCE_DIR}/tool.h
+
+	${CMAKE_CURRENT_SOURCE_DIR}/tools/demo.h
+	${CMAKE_CURRENT_SOURCE_DIR}/tools/graph_view.h
+PARENT_SCOPE)
+
+set(TNTIncludePath
+	${CMAKE_CURRENT_SOURCE_DIR}/
+PARENT_SCOPE)
