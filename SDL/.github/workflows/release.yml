@@ -256,7 +256,7 @@ jobs:
 
   msvc:
     needs: [src]
-    runs-on: windows-2019
+    runs-on: windows-2025
     outputs:
       VC-x86: ${{ steps.releaser.outputs.VC-x86 }}
       VC-x64: ${{ steps.releaser.outputs.VC-x64 }}
@@ -532,10 +532,11 @@ jobs:
         with:
           sparse-checkout: 'build-scripts/build-release.py'
       - name: 'Setup Android NDK'
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           local-cache: true
-          ndk-version: r21e
+          ndk-version: r28c
       - name: 'Setup Java JDK'
         uses: actions/setup-java@v4
         with:
@@ -561,6 +562,8 @@ jobs:
         run: |
           python build-scripts/build-release.py \
             --actions android \
+            --android-api 21 \
+            --android-ndk-home "${{ steps.setup-ndk.outputs.ndk-path }}" \
             --commit ${{ inputs.commit }} \
             --root "${{ steps.tar.outputs.path }}" \
             --github \

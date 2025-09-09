@@ -35,6 +35,9 @@ static UserStorageBootStrap *userbootstrap[] = {
 #ifdef SDL_STORAGE_STEAM
     &STEAM_userbootstrap,
 #endif
+#ifdef SDL_STORAGE_PRIVATE
+    &PRIVATE_userbootstrap,
+#endif
     &GENERIC_userbootstrap,
     NULL
 };
@@ -115,7 +118,9 @@ SDL_Storage *SDL_OpenTitleStorage(const char *override, SDL_PropertiesID props)
             }
         }
     }
-    if (!storage) {
+    if (storage) {
+        SDL_DebugLogBackend("title_storage", titlebootstrap[i]->name);
+    } else {
         if (driver_name) {
             SDL_SetError("%s not available", driver_name);
         } else {
@@ -157,7 +162,9 @@ SDL_Storage *SDL_OpenUserStorage(const char *org, const char *app, SDL_Propertie
             }
         }
     }
-    if (!storage) {
+    if (storage) {
+        SDL_DebugLogBackend("user_storage", userbootstrap[i]->name);
+    } else {
         if (driver_name) {
             SDL_SetError("%s not available", driver_name);
         } else {

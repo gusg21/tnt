@@ -45,8 +45,8 @@
 
 // handle to Avrt.dll--Vista and later!--for flagging the callback thread as "Pro Audio" (low latency).
 static HMODULE libavrt = NULL;
-typedef HANDLE(WINAPI *pfnAvSetMmThreadCharacteristicsW)(LPCWSTR, LPDWORD);
-typedef BOOL(WINAPI *pfnAvRevertMmThreadCharacteristics)(HANDLE);
+typedef HANDLE (WINAPI *pfnAvSetMmThreadCharacteristicsW)(LPCWSTR, LPDWORD);
+typedef BOOL (WINAPI *pfnAvRevertMmThreadCharacteristics)(HANDLE);
 static pfnAvSetMmThreadCharacteristicsW pAvSetMmThreadCharacteristicsW = NULL;
 static pfnAvRevertMmThreadCharacteristics pAvRevertMmThreadCharacteristics = NULL;
 
@@ -337,7 +337,7 @@ typedef struct
 static bool mgmtthrtask_DetectDevices(void *userdata)
 {
     mgmtthrtask_DetectDevicesData *data = (mgmtthrtask_DetectDevicesData *)userdata;
-    SDL_IMMDevice_EnumerateEndpoints(data->default_playback, data->default_recording);
+    SDL_IMMDevice_EnumerateEndpoints(data->default_playback, data->default_recording, SDL_AUDIO_F32);
     return true;
 }
 
@@ -750,7 +750,7 @@ static bool mgmtthrtask_PrepDevice(void *userdata)
     // Try querying IAudioClient3 if sharemode is AUDCLNT_SHAREMODE_SHARED
     if (sharemode == AUDCLNT_SHAREMODE_SHARED) {
         IAudioClient3 *client3 = NULL;
-        ret = IAudioClient_QueryInterface(client, &SDL_IID_IAudioClient3, (void**)&client3);
+        ret = IAudioClient_QueryInterface(client, &SDL_IID_IAudioClient3, (void **)&client3);
         if (SUCCEEDED(ret)) {
             UINT32 default_period_in_frames = 0;
             UINT32 fundamental_period_in_frames = 0;
@@ -957,7 +957,7 @@ static bool WASAPI_Init(SDL_AudioDriverImpl *impl)
 }
 
 AudioBootStrap WASAPI_bootstrap = {
-    "wasapi", "WASAPI", WASAPI_Init, false
+    "wasapi", "WASAPI", WASAPI_Init, false, false
 };
 
 #endif // SDL_AUDIO_DRIVER_WASAPI

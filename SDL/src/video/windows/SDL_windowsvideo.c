@@ -36,6 +36,97 @@
 #include "SDL_windowsrawinput.h"
 #include "SDL_windowsvulkan.h"
 
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+#include <shobjidl.h>
+
+#ifndef __ITaskbarList3_FWD_DEFINED__
+typedef struct ITaskbarList3 ITaskbarList3;
+#endif
+
+#ifndef __ITaskbarList3_INTERFACE_DEFINED__
+typedef enum TBPFLAG
+{
+    TBPF_NOPROGRESS = 0x0,
+    TBPF_INDETERMINATE = 0x1,
+    TBPF_NORMAL = 0x2,
+    TBPF_ERROR = 0x4,
+    TBPF_PAUSED = 0x8
+} TBPFLAG;
+
+typedef enum THUMBBUTTONMASK
+{
+    THB_BITMAP = 0x1,
+    THB_ICON = 0x2,
+    THB_TOOLTIP = 0x4,
+    THB_FLAGS = 0x8
+} THUMBBUTTONMASK;
+
+typedef enum THUMBBUTTONFLAGS
+{
+    THBF_ENABLED = 0x0,
+    THBF_DISABLED = 0x1,
+    THBF_DISMISSONCLICK = 0x2,
+    THBF_NOBACKGROUND = 0x4,
+    THBF_HIDDEN = 0x8,
+    THBF_NONINTERACTIVE = 0x10
+} THUMBBUTTONFLAGS;
+ 
+#if defined(_MSC_VER)
+#pragma warning(disable: 4103)
+#endif
+#pragma pack(push, 8)
+typedef struct THUMBBUTTON
+{
+    THUMBBUTTONMASK dwMask;
+    UINT iId;
+    UINT iBitmap;
+    HICON hIcon;
+    WCHAR szTip[260];
+    THUMBBUTTONFLAGS dwFlags;
+} THUMBBUTTON;
+
+typedef struct THUMBBUTTON *LPTHUMBBUTTON;
+#pragma pack(pop)
+
+#ifndef HIMAGELIST
+struct _IMAGELIST;
+typedef struct _IMAGELIST *HIMAGELIST;
+#endif
+
+typedef struct ITaskbarList3Vtbl
+{
+    HRESULT (__stdcall *QueryInterface)(ITaskbarList3 *This, REFIID riid, void **ppvObject);
+    ULONG (__stdcall *AddRef)(ITaskbarList3 *This);
+    ULONG (__stdcall *Release)(ITaskbarList3 *This);
+    HRESULT (__stdcall *HrInit)(ITaskbarList3 *This);
+    HRESULT (__stdcall *AddTab)(ITaskbarList3 *This, HWND hwnd);
+    HRESULT (__stdcall *DeleteTab)(ITaskbarList3 *This, HWND hwnd);
+    HRESULT (__stdcall *ActivateTab)(ITaskbarList3 *This, HWND hwnd);
+    HRESULT (__stdcall *SetActiveAlt)(ITaskbarList3 *This, HWND hwnd);
+    HRESULT (__stdcall *MarkFullscreenWindow)(ITaskbarList3 *This, HWND hwnd, BOOL fFullscreen);
+    HRESULT (__stdcall *SetProgressValue)(ITaskbarList3 *This, HWND hwnd, ULONGLONG ullCompleted, ULONGLONG ullTotal);
+    HRESULT (__stdcall *SetProgressState)(ITaskbarList3 *This, HWND hwnd, TBPFLAG tbpFlags);
+    HRESULT (__stdcall *RegisterTab)(ITaskbarList3 *This, HWND hwndTab, HWND hwndMDI);
+    HRESULT (__stdcall *UnregisterTab)(ITaskbarList3 *This, HWND hwndTab);
+    HRESULT (__stdcall *SetTabOrder)(ITaskbarList3 *This, HWND hwndTab, HWND hwndInsertBefore);
+    HRESULT (__stdcall *SetTabActive)(ITaskbarList3 *This, HWND hwndTab, HWND hwndMDI, DWORD dwReserved);
+    HRESULT (__stdcall *ThumbBarAddButtons)(ITaskbarList3 *This, HWND hwnd, UINT cButtons, LPTHUMBBUTTON pButton);
+    HRESULT (__stdcall *ThumbBarUpdateButtons)(ITaskbarList3 *This, HWND hwnd, UINT cButtons, LPTHUMBBUTTON pButton);
+    HRESULT (__stdcall *ThumbBarSetImageList)(ITaskbarList3 *This, HWND hwnd, HIMAGELIST himl);
+    HRESULT (__stdcall *SetOverlayIcon)(ITaskbarList3 *This, HWND hwnd, HICON hIcon, LPCWSTR pszDescription);
+    HRESULT (__stdcall *SetThumbnailTooltip)(ITaskbarList3 *This, HWND hwnd, LPCWSTR pszTip);
+    HRESULT (__stdcall *SetThumbnailClip)(ITaskbarList3 *This, HWND hwnd, RECT *prcClip);
+} ITaskbarList3Vtbl;
+
+struct ITaskbarList3
+{
+    ITaskbarList3Vtbl *lpVtbl;
+};
+
+#endif // #ifndef __ITaskbarList3_INTERFACE_DEFINED__
+
+#endif
+
 #ifdef SDL_GDK_TEXTINPUT
 #include "../gdk/SDL_gdktextinput.h"
 #endif
@@ -76,10 +167,15 @@ static void SDLCALL UpdateWindowFrameUsableWhileCursorHidden(void *userdata, con
 #if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
 static bool WIN_SuspendScreenSaver(SDL_VideoDevice *_this)
 {
+    DWORD result;
     if (_this->suspend_screensaver) {
-        SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
+        result = SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
     } else {
-        SetThreadExecutionState(ES_CONTINUOUS);
+        result = SetThreadExecutionState(ES_CONTINUOUS);
+    }
+    if (result == 0) {
+        SDL_SetError("SetThreadExecutionState() failed");
+        return false;
     }
     return true;
 }
@@ -103,6 +199,9 @@ static void WIN_DeleteDevice(SDL_VideoDevice *device)
     if (data->shcoreDLL) {
         SDL_UnloadObject(data->shcoreDLL);
     }
+    if (data->dwmapiDLL) {
+        SDL_UnloadObject(data->dwmapiDLL);
+    }
 #endif
 #ifdef HAVE_DXGI_H
     if (data->pDXGIFactory) {
@@ -112,9 +211,6 @@ static void WIN_DeleteDevice(SDL_VideoDevice *device)
         SDL_UnloadObject(data->dxgiDLL);
     }
 #endif
-    if (device->wakeup_lock) {
-        SDL_DestroyMutex(device->wakeup_lock);
-    }
     SDL_free(device->internal->rawinput);
     SDL_free(device->internal);
     SDL_free(device);
@@ -140,7 +236,6 @@ static SDL_VideoDevice *WIN_CreateDevice(void)
         return NULL;
     }
     device->internal = data;
-    device->wakeup_lock = SDL_CreateMutex();
     device->system_theme = WIN_GetSystemTheme();
 
 #if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
@@ -160,8 +255,8 @@ static SDL_VideoDevice *WIN_CreateDevice(void)
         data->GetDpiForWindow = (UINT (WINAPI *)(HWND))SDL_LoadFunction(data->userDLL, "GetDpiForWindow");
         data->AreDpiAwarenessContextsEqual = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT))SDL_LoadFunction(data->userDLL, "AreDpiAwarenessContextsEqual");
         data->IsValidDpiAwarenessContext = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT))SDL_LoadFunction(data->userDLL, "IsValidDpiAwarenessContext");
-        data->GetDisplayConfigBufferSizes = (LONG (WINAPI *)(UINT32,UINT32*,UINT32* ))SDL_LoadFunction(data->userDLL, "GetDisplayConfigBufferSizes");
-        data->QueryDisplayConfig = (LONG (WINAPI *)(UINT32,UINT32*,DISPLAYCONFIG_PATH_INFO*,UINT32*,DISPLAYCONFIG_MODE_INFO*,DISPLAYCONFIG_TOPOLOGY_ID*))SDL_LoadFunction(data->userDLL, "QueryDisplayConfig");
+        data->GetDisplayConfigBufferSizes = (LONG (WINAPI *)(UINT32,UINT32 *,UINT32 *))SDL_LoadFunction(data->userDLL, "GetDisplayConfigBufferSizes");
+        data->QueryDisplayConfig = (LONG (WINAPI *)(UINT32,UINT32 *,DISPLAYCONFIG_PATH_INFO*,UINT32 *,DISPLAYCONFIG_MODE_INFO*,DISPLAYCONFIG_TOPOLOGY_ID*))SDL_LoadFunction(data->userDLL, "QueryDisplayConfig");
         data->DisplayConfigGetDeviceInfo = (LONG (WINAPI *)(DISPLAYCONFIG_DEVICE_INFO_HEADER*))SDL_LoadFunction(data->userDLL, "DisplayConfigGetDeviceInfo");
         data->GetPointerType = (BOOL (WINAPI *)(UINT32, POINTER_INPUT_TYPE *))SDL_LoadFunction(data->userDLL, "GetPointerType");
         data->GetPointerPenInfo = (BOOL (WINAPI *)(UINT32, POINTER_PEN_INFO *))SDL_LoadFunction(data->userDLL, "GetPointerPenInfo");
@@ -179,20 +274,31 @@ static SDL_VideoDevice *WIN_CreateDevice(void)
     } else {
         SDL_ClearError();
     }
+
+    data->dwmapiDLL = SDL_LoadObject("DWMAPI.DLL");
+    if (data->dwmapiDLL) {
+        /* *INDENT-OFF* */ // clang-format off
+        data->DwmFlush = (HRESULT (WINAPI *)(void))SDL_LoadFunction(data->dwmapiDLL, "DwmFlush");
+        data->DwmEnableBlurBehindWindow = (HRESULT (WINAPI *)(HWND hwnd, const DWM_BLURBEHIND *pBlurBehind))SDL_LoadFunction(data->dwmapiDLL, "DwmEnableBlurBehindWindow");
+        data->DwmSetWindowAttribute = (HRESULT (WINAPI *)(HWND hwnd, DWORD dwAttribute, LPCVOID pvAttribute, DWORD cbAttribute))SDL_LoadFunction(data->dwmapiDLL, "DwmSetWindowAttribute");
+        /* *INDENT-ON* */ // clang-format on
+    } else {
+        SDL_ClearError();
+    }
 #endif // #if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
 
 #ifdef HAVE_DXGI_H
     data->dxgiDLL = SDL_LoadObject("DXGI.DLL");
     if (data->dxgiDLL) {
         /* *INDENT-OFF* */ // clang-format off
-        typedef HRESULT (WINAPI *CreateDXGI_t)(REFIID riid, void **ppFactory);
+        typedef HRESULT (WINAPI *pfnCreateDXGI)(REFIID riid, void **ppFactory);
         /* *INDENT-ON* */ // clang-format on
-        CreateDXGI_t CreateDXGI;
+        pfnCreateDXGI pCreateDXGI;
 
-        CreateDXGI = (CreateDXGI_t)SDL_LoadFunction(data->dxgiDLL, "CreateDXGIFactory");
-        if (CreateDXGI) {
+        pCreateDXGI = (pfnCreateDXGI)SDL_LoadFunction(data->dxgiDLL, "CreateDXGIFactory");
+        if (pCreateDXGI) {
             GUID dxgiGUID = { 0x7b7166ec, 0x21c7, 0x44ae, { 0xb2, 0x1a, 0xc9, 0xae, 0x32, 0x1a, 0xe3, 0x69 } };
-            CreateDXGI(&dxgiGUID, (void **)&data->pDXGIFactory);
+            pCreateDXGI(&dxgiGUID, (void **)&data->pDXGIFactory);
         }
     }
 #endif
@@ -249,6 +355,7 @@ static SDL_VideoDevice *WIN_CreateDevice(void)
     device->SetWindowHitTest = WIN_SetWindowHitTest;
     device->AcceptDragAndDrop = WIN_AcceptDragAndDrop;
     device->FlashWindow = WIN_FlashWindow;
+    device->ApplyWindowProgress = WIN_ApplyWindowProgress;
     device->ShowWindowSystemMenu = WIN_ShowWindowSystemMenu;
     device->SetWindowFocusable = WIN_SetWindowFocusable;
     device->UpdateWindowShape = WIN_UpdateWindowShape;
@@ -330,10 +437,11 @@ static SDL_VideoDevice *WIN_CreateDevice(void)
 VideoBootStrap WINDOWS_bootstrap = {
     "windows", "SDL Windows video driver", WIN_CreateDevice,
     #if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
-    WIN_ShowMessageBox
+    WIN_ShowMessageBox,
     #else
-    NULL
+    NULL,
     #endif
+    false
 };
 
 static BOOL WIN_DeclareDPIAwareUnaware(SDL_VideoDevice *_this)
@@ -353,7 +461,6 @@ static BOOL WIN_DeclareDPIAwareUnaware(SDL_VideoDevice *_this)
 
 static BOOL WIN_DeclareDPIAwareSystem(SDL_VideoDevice *_this)
 {
-#if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
     SDL_VideoData *data = _this->internal;
 
     if (data->SetProcessDpiAwarenessContext) {
@@ -365,9 +472,9 @@ static BOOL WIN_DeclareDPIAwareSystem(SDL_VideoDevice *_this)
     } else if (data->SetProcessDPIAware) {
         // Windows Vista
         return data->SetProcessDPIAware();
+    } else {
+        return FALSE;
     }
-#endif
-    return FALSE;
 }
 
 static BOOL WIN_DeclareDPIAwarePerMonitor(SDL_VideoDevice *_this)
@@ -531,6 +638,7 @@ static bool WIN_VideoInit(SDL_VideoDevice *_this)
 
 #if !defined(SDL_PLATFORM_XBOXONE) && !defined(SDL_PLATFORM_XBOXSERIES)
     data->_SDL_WAKEUP = RegisterWindowMessageA("_SDL_WAKEUP");
+    data->WM_TASKBAR_BUTTON_CREATED = WIN_IsWindows7OrGreater() ? RegisterWindowMessageA("TaskbarButtonCreated") : 0;
 #endif
 
     return true;
@@ -554,6 +662,11 @@ void WIN_VideoQuit(SDL_VideoDevice *_this)
     WIN_QuitDeviceNotification();
     WIN_QuitKeyboard(_this);
     WIN_QuitMouse(_this);
+
+    if (data->taskbar_list) {
+        data->taskbar_list->lpVtbl->Release(data->taskbar_list);
+        data->taskbar_list = NULL;
+    }
 
     if (data->oleinitialized) {
         OleUninitialize();
@@ -592,18 +705,18 @@ bool D3D_LoadDLL(void **pD3DDLL, IDirect3D9 **pDirect3D9Interface)
     *pD3DDLL = SDL_LoadObject("D3D9.DLL");
     if (*pD3DDLL) {
         /* *INDENT-OFF* */ // clang-format off
-        typedef IDirect3D9 *(WINAPI *Direct3DCreate9_t)(UINT SDKVersion);
-        typedef HRESULT (WINAPI* Direct3DCreate9Ex_t)(UINT SDKVersion, IDirect3D9Ex** ppD3D);
+        typedef IDirect3D9 *(WINAPI *pfnDirect3DCreate9)(UINT SDKVersion);
+        typedef HRESULT (WINAPI *pfnDirect3DCreate9Ex)(UINT SDKVersion, IDirect3D9Ex **ppD3D);
         /* *INDENT-ON* */ // clang-format on
-        Direct3DCreate9_t Direct3DCreate9Func;
+        pfnDirect3DCreate9 pDirect3DCreate9;
 
         if (SDL_GetHintBoolean(SDL_HINT_WINDOWS_USE_D3D9EX, false)) {
-            Direct3DCreate9Ex_t Direct3DCreate9ExFunc;
+            pfnDirect3DCreate9Ex pDirect3DCreate9Ex;
 
-            Direct3DCreate9ExFunc = (Direct3DCreate9Ex_t)SDL_LoadFunction(*pD3DDLL, "Direct3DCreate9Ex");
-            if (Direct3DCreate9ExFunc) {
+            pDirect3DCreate9Ex = (pfnDirect3DCreate9Ex)SDL_LoadFunction(*pD3DDLL, "Direct3DCreate9Ex");
+            if (pDirect3DCreate9Ex) {
                 IDirect3D9Ex *pDirect3D9ExInterface;
-                HRESULT hr = Direct3DCreate9ExFunc(D3D_SDK_VERSION, &pDirect3D9ExInterface);
+                HRESULT hr = pDirect3DCreate9Ex(D3D_SDK_VERSION, &pDirect3D9ExInterface);
                 if (SUCCEEDED(hr)) {
                     const GUID IDirect3D9_GUID = { 0x81bdcbca, 0x64d4, 0x426d, { 0xae, 0x8d, 0xad, 0x1, 0x47, 0xf4, 0x27, 0x5c } };
                     hr = IDirect3D9Ex_QueryInterface(pDirect3D9ExInterface, &IDirect3D9_GUID, (void **)pDirect3D9Interface);
@@ -615,9 +728,9 @@ bool D3D_LoadDLL(void **pD3DDLL, IDirect3D9 **pDirect3D9Interface)
             }
         }
 
-        Direct3DCreate9Func = (Direct3DCreate9_t)SDL_LoadFunction(*pD3DDLL, "Direct3DCreate9");
-        if (Direct3DCreate9Func) {
-            *pDirect3D9Interface = Direct3DCreate9Func(D3D_SDK_VERSION);
+        pDirect3DCreate9 = (pfnDirect3DCreate9)SDL_LoadFunction(*pD3DDLL, "Direct3DCreate9");
+        if (pDirect3DCreate9) {
+            *pDirect3D9Interface = pDirect3DCreate9(D3D_SDK_VERSION);
             if (*pDirect3D9Interface) {
                 return true;
             }

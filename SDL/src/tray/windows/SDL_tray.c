@@ -23,12 +23,9 @@
 
 #include "../SDL_tray_utils.h"
 #include "../../core/windows/SDL_windows.h"
-#include "../../video/windows/SDL_windowswindow.h"
 
 #include <windowsx.h>
 #include <shellapi.h>
-
-#include "../../video/windows/SDL_surface_utils.h"
 
 #ifndef NOTIFYICON_VERSION_4
 #define NOTIFYICON_VERSION_4 4
@@ -115,7 +112,7 @@ LRESULT CALLBACK TrayWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_TRAYICON:
             if (LOWORD(lParam) == WM_CONTEXTMENU || LOWORD(lParam) == WM_LBUTTONUP) {
                 SetForegroundWindow(hwnd);
-                
+
                 if (tray->menu) {
                     TrackPopupMenu(tray->menu->hMenu, TPM_BOTTOMALIGN | TPM_RIGHTALIGN, GET_X_LPARAM(wParam), GET_Y_LPARAM(wParam), 0, hwnd, NULL);
                 }
@@ -247,7 +244,7 @@ SDL_Tray *SDL_CreateTray(SDL_Surface *icon, const char *tooltip)
     SDL_free(tooltipw);
 
     if (icon) {
-        tray->nid.hIcon = CreateIconFromSurface(icon);
+        tray->nid.hIcon = WIN_CreateIconFromSurface(icon);
 
         if (!tray->nid.hIcon) {
             tray->nid.hIcon = load_default_icon();
@@ -280,7 +277,7 @@ void SDL_SetTrayIcon(SDL_Tray *tray, SDL_Surface *icon)
     }
 
     if (icon) {
-        tray->nid.hIcon = CreateIconFromSurface(icon);
+        tray->nid.hIcon = WIN_CreateIconFromSurface(icon);
 
         if (!tray->nid.hIcon) {
             tray->nid.hIcon = load_default_icon();
@@ -367,15 +364,15 @@ SDL_TrayMenu *SDL_GetTraySubmenu(SDL_TrayEntry *entry)
     return entry->submenu;
 }
 
-const SDL_TrayEntry **SDL_GetTrayEntries(SDL_TrayMenu *menu, int *size)
+const SDL_TrayEntry **SDL_GetTrayEntries(SDL_TrayMenu *menu, int *count)
 {
     if (!menu) {
         SDL_InvalidParamError("menu");
         return NULL;
     }
 
-    if (size) {
-        *size = menu->nEntries;
+    if (count) {
+        *count = menu->nEntries;
     }
     return (const SDL_TrayEntry **)menu->entries;
 }
@@ -544,7 +541,7 @@ void SDL_SetTrayEntryLabel(SDL_TrayEntry *entry, const char *label)
     mii.dwTypeData = label_w;
     mii.cch = (UINT) SDL_wcslen(label_w);
 
-    if (!SetMenuItemInfoW(entry->parent->hMenu, (UINT) entry->id, TRUE, &mii)) {
+    if (!SetMenuItemInfoW(entry->parent->hMenu, (UINT) entry->id, FALSE, &mii)) {
         SDL_SetError("Couldn't update tray entry label");
     }
 

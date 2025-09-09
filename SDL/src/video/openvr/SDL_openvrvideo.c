@@ -22,7 +22,9 @@
 
 #ifdef SDL_VIDEO_DRIVER_OPENVR
 
+#if 0
 #define DEBUG_OPENVR
+#endif
 
 #include "../../events/SDL_mouse_c.h"
 #include "../../events/SDL_keyboard_c.h"
@@ -50,6 +52,19 @@ struct SDL_GLContextState
 #else
 #include <SDL3/SDL_opengles2_gl2.h>
 #endif
+
+#ifdef SDL_PLATFORM_WINDOWS
+#define SDL_OPENVR_DRIVER_DYNAMIC "openvr_api.dll"
+#else
+#define SDL_OPENVR_DRIVER_DYNAMIC "openvr_api.so"
+#endif
+
+SDL_ELF_NOTE_DLOPEN(
+    "video-openvr",
+    "Support for OpenVR video",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    SDL_OPENVR_DRIVER_DYNAMIC
+);
 
 #define MARKER_ID 0
 #define MARKER_STR "vr-marker,frame_end,type,application"
@@ -106,7 +121,7 @@ static BOOL (*ov_wglMakeCurrent)(HDC, HGLRC);
 #define OPENVR_DEFAULT_WIDTH 1920
 #define OPENVR_DEFAULT_HEIGHT 1080
 
-#define OPENVR_SetupProc(proc) { proc = (void*)SDL_GL_GetProcAddress((#proc)+3); if (!proc) { failed_extension = (#proc)+3; } }
+#define OPENVR_SetupProc(proc) { proc = (void *)SDL_GL_GetProcAddress((#proc)+3); if (!proc) { failed_extension = (#proc)+3; } }
 
 static bool OPENVR_InitExtensions(SDL_VideoDevice *_this)
 {
@@ -207,9 +222,7 @@ static bool OPENVR_VideoInit(SDL_VideoDevice *_this)
     } else {
         display.desktop_mode.refresh_rate = data->oSystem->GetFloatTrackedDeviceProperty(k_unTrackedDeviceIndex_Hmd, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, 0);
     }
-
-    display.internal = (SDL_DisplayData *)data;
-    display.name = (char*)"OpenVRDisplay";
+    display.name = (char *)"OpenVRDisplay";
     SDL_AddVideoDisplay(&display, false);
 
     return true;
@@ -248,7 +261,7 @@ static uint32_t *ImageSDLToOpenVRGL(SDL_Surface * surf, bool bFlipY)
     int x, y;
     uint32_t * pxd = SDL_malloc(4 * surf->w * surf->h);
     for(y = 0; y < h; y++) {
-        uint32_t * iline = (uint32_t*)&(((uint8_t*)surf->pixels)[y*pitch]);
+        uint32_t * iline = (uint32_t *)&(((uint8_t *)surf->pixels)[y * pitch]);
         uint32_t * oline = &pxd[(bFlipY?(h-y-1):y)*w];
         for(x = 0; x < w; x++)
         {
@@ -428,7 +441,7 @@ static void OPENVR_VirtualControllerUpdate(void *userdata)
           xval *= -1.0f;
         if (a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || a == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
           xval = xval * 2.0f - 1.0f;
-        //SDL_SetJoystickVirtualAxis(joystick, a, analog_input_action.x*32767);
+        //SDL_SetJoystickVirtualAxis(joystick, a, analog_input_action.x * 32767);
         xval *= SDL_JOYSTICK_AXIS_MAX;
         SDL_SetJoystickVirtualAxis(joystick, a, xval);
 #ifdef DEBUG_OPENVR
@@ -445,7 +458,7 @@ static void OPENVR_VirtualControllerUpdate(void *userdata)
 static bool OPENVR_SetupJoystickBasedOnLoadedActionManifest(SDL_VideoData * videodata)
 {
     SDL_VirtualJoystickDesc desc;
-    int virtual_index;
+    SDL_JoystickID virtual_id;
 
     EVRInputError e = 0;
 
@@ -537,22 +550,22 @@ static bool OPENVR_SetupJoystickBasedOnLoadedActionManifest(SDL_VideoData * vide
     desc.RumbleTriggers = OPENVR_VirtualControllerRumbleTriggers;
     desc.Update = OPENVR_VirtualControllerUpdate;
     desc.userdata = videodata;
-    virtual_index = SDL_AttachVirtualJoystick(&desc);
+    virtual_id = SDL_AttachVirtualJoystick(&desc);
 
-    if (virtual_index < 0) {
+    if (!virtual_id) {
+        return SDL_SetError("OPENVR: Couldn't attach virtual joystick device: %s", SDL_GetError());
+    }
+
+    videodata->virtual_joystick = SDL_OpenJoystick(virtual_id);
+    if (!videodata->virtual_joystick) {
         return SDL_SetError("OPENVR: Couldn't open virtual joystick device: %s", SDL_GetError());
-    } else {
-        videodata->virtual_joystick = SDL_OpenJoystick(virtual_index);
-        if (!videodata->virtual_joystick) {
-            return SDL_SetError("OPENVR: Couldn't open virtual joystick device: %s", SDL_GetError());
-        }
     }
 
 #ifdef DEBUG_OPENVR
     SDL_Log("Loaded virtual joystick with %d buttons and %d axes", videodata->input_action_handles_buttons_count, videodata->input_action_handles_axes_count);
 #endif
 
-    return false;
+    return true;
 }
 
 static bool OPENVR_InitializeOverlay(SDL_VideoDevice *_this,SDL_Window *window)
@@ -593,7 +606,7 @@ static bool OPENVR_InitializeOverlay(SDL_VideoDevice *_this,SDL_Window *window)
             return SDL_SetError("Could not create cursor overlay (%d)", result );
         }
         SDL_PropertiesID props = SDL_GetWindowProperties(window);
-        SDL_SetNumberProperty(props, SDL_PROP_WINDOW_OPENVR_OVERLAY_ID, videodata->overlayID);
+        SDL_SetNumberProperty(props, SDL_PROP_WINDOW_OPENVR_OVERLAY_ID_NUMBER, videodata->overlayID);
         SDL_free(cursorname);
         videodata->bHasShownOverlay = false;
     }
@@ -710,7 +723,7 @@ static bool OPENVR_ReleaseFrame(SDL_VideoDevice *_this)
     if (videodata->overlaytexture != 0 &&
         videodata->targh == videodata->last_targh &&
         videodata->targw == videodata->last_targw) {
-        // Only submit frames to OpenVR if the textu re exists.
+        // Only submit frames to OpenVR if the texture exists.
         struct Texture_t tex;
 
         // Setup a Texture_t object to send in the texture.
@@ -911,7 +924,7 @@ static SDL_GLContext OPENVR_GL_CreateContext(SDL_VideoDevice *_this, SDL_Window 
 
     OPENVR_SetupFrame(_this, window);
 
-    SDL_GLContext result = malloc(sizeof(struct SDL_GLContextState));
+    SDL_GLContext result = SDL_malloc(sizeof(struct SDL_GLContextState));
     if (!result) {
         return NULL;
     }
@@ -1037,7 +1050,7 @@ static SDL_GLContext OVR_EGL_CreateContext(SDL_VideoDevice *_this, SDL_Window * 
 
     ov_glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
     for(int i = 0; i < numExtensions; i++) {
-        const char * ccc = (const char*)ov_glGetStringi(GL_EXTENSIONS, i);
+        const char * ccc = (const char *)ov_glGetStringi(GL_EXTENSIONS, i);
         if (SDL_strcmp(ccc, "GL_KHR_debug") == 0) {
 #ifdef DEBUG_OPENVR
            SDL_Log("Found renderdoc debug extension.");
@@ -1325,7 +1338,7 @@ static bool OPENVR_ShowCursor(SDL_Cursor * cursor)
     hotspot.v[0] = (float)ovrc->hot_x / (float)ovrc->w;
     hotspot.v[1] = (float)ovrc->hot_y / (float)ovrc->h;
 
-    texture.handle = (void*)(intptr_t)(ovrc->texture_id_handle);
+    texture.handle = (void *)(intptr_t)(ovrc->texture_id_handle);
     texture.eType = ETextureType_TextureType_OpenGL;
     texture.eColorSpace = EColorSpace_ColorSpace_Auto;
 
@@ -1393,7 +1406,7 @@ static bool OPENVR_SetWindowIcon(SDL_VideoDevice *_this, SDL_Window * window, SD
     SDL_free(pixels);
     ov_glBindTexture(GL_TEXTURE_2D, 0);
 
-    texture.handle = (void*)(intptr_t)(texture_id_handle);
+    texture.handle = (void *)(intptr_t)(texture_id_handle);
     texture.eType = ETextureType_TextureType_OpenGL;
     texture.eColorSpace = EColorSpace_ColorSpace_Auto;
 
@@ -1472,6 +1485,7 @@ static SDL_VideoDevice *OPENVR_CreateDevice(void)
 {
     SDL_VideoDevice *device;
     SDL_VideoData *data;
+    const char *hint;
 
 #ifdef SDL_PLATFORM_WINDOWS
     SDL_RegisterApp(NULL, 0, NULL);
@@ -1493,19 +1507,13 @@ static SDL_VideoDevice *OPENVR_CreateDevice(void)
     }
     device->internal = data;
 
-    {
-        const char * hint = SDL_GetHint(SDL_HINT_OPENVR_LIBRARY);
-        if (hint)
-            data->openVRLIB = SDL_LoadObject(hint);
-#ifdef SDL_PLATFORM_WINDOWS
-        if (!data->openVRLIB)
-            data->openVRLIB = SDL_LoadObject("openvr_api.dll");
-#else
-        if (!data->openVRLIB)
-            data->openVRLIB = SDL_LoadObject("openvr_api.so");
-#endif
+    hint = SDL_GetHint(SDL_HINT_OPENVR_LIBRARY);
+    if (hint) {
+        data->openVRLIB = SDL_LoadObject(hint);
     }
-
+    if (!data->openVRLIB) {
+        data->openVRLIB = SDL_LoadObject(SDL_OPENVR_DRIVER_DYNAMIC);
+    }
     if (!data->openVRLIB) {
         SDL_SetError("Could not open OpenVR API Library");
         goto error;
@@ -1540,7 +1548,7 @@ static SDL_VideoDevice *OPENVR_CreateDevice(void)
         SDL_SetError("Could not get interfaces for the OpenVR System (%s), Overlay (%s) and Input (%s) versions", IVRSystem_Version, IVROverlay_Version, IVRInput_Version);
     }
 
-    const char *hint = SDL_GetHint("SDL_OPENVR_INPUT_PROFILE");
+    hint = SDL_GetHint("SDL_OPENVR_INPUT_PROFILE");
     char *loadpath = 0;
     EVRInputError err;
 
@@ -1657,7 +1665,7 @@ error:
 }
 
 VideoBootStrap OPENVR_bootstrap = {
-    "openvr", "SDL OpenVR video driver", OPENVR_CreateDevice
+    "openvr", "SDL OpenVR video driver", OPENVR_CreateDevice, NULL, false
 };
 
 #endif // SDL_VIDEO_DRIVER_WINDOWS

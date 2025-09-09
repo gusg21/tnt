@@ -26,6 +26,7 @@
 #include "SDL_x11video.h"
 #include "SDL_x11mouse.h"
 #include "SDL_x11xinput2.h"
+#include "SDL_x11xtest.h"
 #include "../SDL_video_c.h"
 #include "../../events/SDL_mouse_c.h"
 
@@ -367,6 +368,10 @@ static bool X11_WarpMouse(SDL_Window *window, float x, float y)
 {
     SDL_WindowData *data = window->internal;
 
+    if (X11_WarpMouseXTest(SDL_GetVideoDevice(), window, x, y)) {
+        return true;
+    }
+
 #ifdef SDL_VIDEO_DRIVER_X11_XFIXES
     // If we have no barrier, we need to warp
     if (data->pointer_barrier_active == false) {
@@ -380,6 +385,10 @@ static bool X11_WarpMouse(SDL_Window *window, float x, float y)
 
 static bool X11_WarpMouseGlobal(float x, float y)
 {
+    if (X11_WarpMouseXTest(SDL_GetVideoDevice(), NULL, x, y)) {
+        return true;
+    }
+
     X11_WarpMouseInternal(DefaultRootWindow(GetDisplay()), x, y);
     return true;
 }
@@ -527,8 +536,10 @@ void X11_QuitMouse(SDL_VideoDevice *_this)
     int j;
 
     for (j = 0; j < SDL_arraysize(sys_cursors); j++) {
-        X11_FreeCursor(sys_cursors[j]);
-        sys_cursors[j] = NULL;
+        if (sys_cursors[j]) {
+            X11_FreeCursor(sys_cursors[j]);
+            sys_cursors[j] = NULL;
+        }
     }
 
     for (i = data->mouse_device_info; i; i = next) {
@@ -543,7 +554,7 @@ void X11_QuitMouse(SDL_VideoDevice *_this)
 void X11_SetHitTestCursor(SDL_HitTestResult rc)
 {
     if (rc == SDL_HITTEST_NORMAL || rc == SDL_HITTEST_DRAGGABLE) {
-        SDL_SetCursor(NULL);
+        SDL_RedrawCursor();
     } else {
         X11_ShowCursor(sys_cursors[rc]);
     }

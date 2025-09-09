@@ -1,3 +1,10 @@
+macro(check_c_source_compiles_static SOURCE VAR)
+  set(saved_CMAKE_TRY_COMPILE_TARGET_TYPE "${CMAKE_TRY_COMPILE_TARGET_TYPE}")
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+  check_c_source_compiles("${SOURCE}" ${VAR} ${ARGN})
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE "${saved_CMAKE_TRY_COMPILE_TARGET_TYPE}")
+endmacro()
+
 macro(FindLibraryAndSONAME _LIB)
   cmake_parse_arguments(_FLAS "" "" "LIBDIRS" ${ARGN})
 
@@ -274,10 +281,11 @@ macro(CheckX11)
     set(Xrandr_PKG_CONFIG_SPEC xrandr)
     set(Xrender_PKG_CONFIG_SPEC xrender)
     set(Xss_PKG_CONFIG_SPEC xscrnsaver)
+    set(Xtst_PKG_CONFIG_SPEC xtst)
 
     find_package(X11)
 
-    foreach(_LIB X11 Xext Xcursor Xi Xfixes Xrandr Xrender Xss)
+    foreach(_LIB X11 Xext Xcursor Xi Xfixes Xrandr Xrender Xss Xtst)
       get_filename_component(_libdir "${X11_${_LIB}_LIB}" DIRECTORY)
       FindLibraryAndSONAME("${_LIB}" LIBDIRS ${_libdir})
     endforeach()
@@ -310,6 +318,7 @@ macro(CheckX11)
     find_file(HAVE_XSYNC_H NAMES "X11/extensions/sync.h" HINTS "${X11_INCLUDEDIR}")
     find_file(HAVE_XSS_H NAMES "X11/extensions/scrnsaver.h" HINTS "${X11_INCLUDEDIR}")
     find_file(HAVE_XSHAPE_H NAMES "X11/extensions/shape.h" HINTS "${X11_INCLUDEDIR}")
+    find_file(HAVE_XTEST_H NAMES "X11/extensions/XTest.h" HINTS "${X11_INCLUDEDIR}")
     find_file(HAVE_XDBE_H NAMES "X11/extensions/Xdbe.h" HINTS "${X11_INCLUDEDIR}")
     find_file(HAVE_XEXT_H NAMES "X11/extensions/Xext.h" HINTS "${X11_INCLUDEDIR}")
 
@@ -367,7 +376,7 @@ macro(CheckX11)
 
       list(APPEND CMAKE_REQUIRED_LIBRARIES ${X11_LIB})
 
-      check_c_source_compiles("
+      check_c_source_compiles_static("
           #include <X11/Xlib.h>
           int main(int argc, char **argv) {
             Display *display;
@@ -381,7 +390,7 @@ macro(CheckX11)
         set(SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS 1)
       endif()
 
-      check_symbol_exists(XkbLookupKeySym "X11/Xlib.h;X11/XKBlib.h" SDL_VIDEO_DRIVER_X11_HAS_XKBLOOKUPKEYSYM)
+      check_include_file("X11/XKBlib.h" SDL_VIDEO_DRIVER_X11_HAS_XKBLIB)
 
       if(SDL_X11_XCURSOR AND HAVE_XCURSOR_H AND XCURSOR_LIB)
         set(HAVE_X11_XCURSOR TRUE)
@@ -407,8 +416,19 @@ macro(CheckX11)
         endif()
         set(SDL_VIDEO_DRIVER_X11_XINPUT2 1)
 
-        # Check for multitouch
+        # Check for scroll info
         check_c_source_compiles("
+            #include <X11/Xlib.h>
+            #include <X11/Xproto.h>
+            #include <X11/extensions/XInput2.h>
+            XIScrollClassInfo *s;
+            int main(int argc, char **argv) {}" HAVE_XINPUT2_SCROLLINFO)
+        if(HAVE_XINPUT2_SCROLLINFO)
+          set(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_SCROLLINFO 1)
+        endif()
+
+        # Check for multitouch
+        check_c_source_compiles_static("
             #include <X11/Xlib.h>
             #include <X11/Xproto.h>
             #include <X11/extensions/XInput2.h>
@@ -425,7 +445,7 @@ macro(CheckX11)
 
       # check along with XInput2.h because we use Xfixes with XIBarrierReleasePointer
       if(SDL_X11_XFIXES AND HAVE_XFIXES_H_ AND HAVE_XINPUT2_H)
-        check_c_source_compiles("
+        check_c_source_compiles_static("
             #include <X11/Xlib.h>
             #include <X11/Xproto.h>
             #include <X11/extensions/XInput2.h>
@@ -471,6 +491,16 @@ macro(CheckX11)
       if(SDL_X11_XSHAPE AND HAVE_XSHAPE_H)
         set(SDL_VIDEO_DRIVER_X11_XSHAPE 1)
         set(HAVE_X11_XSHAPE TRUE)
+      endif()
+
+      if(SDL_X11_XTEST AND HAVE_XTEST_H AND XTST_LIB)
+        if(HAVE_X11_SHARED)
+          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XTEST "\"${XTST_LIB_SONAME}\"")
+        else()
+          sdl_link_dependency(xtst LIBS X11::Xtst CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xtst_PKG_CONFIG_SPEC})
+        endif()
+        set(SDL_VIDEO_DRIVER_X11_XTEST 1)
+        set(HAVE_X11_XTEST TRUE)
       endif()
     endif()
   endif()
@@ -573,6 +603,18 @@ macro(CheckWayland)
         sdl_link_dependency(wayland INCLUDES $<TARGET_PROPERTY:PkgConfig::PC_WAYLAND,INTERFACE_INCLUDE_DIRECTORIES>)
       else()
         sdl_link_dependency(wayland LIBS PkgConfig::PC_WAYLAND PKG_CONFIG_PREFIX PC_WAYLAND PKG_CONFIG_SPECS ${WAYLAND_PKG_CONFIG_SPEC})
+      endif()
+
+      # xkbcommon doesn't provide internal version defines, so generate them here.
+      if (PC_WAYLAND_xkbcommon_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+        set(SDL_XKBCOMMON_VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(SDL_XKBCOMMON_VERSION_MINOR ${CMAKE_MATCH_2})
+        set(SDL_XKBCOMMON_VERSION_PATCH ${CMAKE_MATCH_3})
+      else()
+        message(WARNING "Failed to parse xkbcommon version; defaulting to lowest supported (0.5.0)")
+        set(SDL_XKBCOMMON_VERSION_MAJOR 0)
+        set(SDL_XKBCOMMON_VERSION_MINOR 5)
+        set(SDL_XKBCOMMON_VERSION_PATCH 0)
       endif()
 
       if(SDL_WAYLAND_LIBDECOR)
@@ -795,7 +837,7 @@ endmacro()
 macro(CheckPTHREAD)
   cmake_push_check_state()
   if(SDL_PTHREADS)
-    if(ANDROID)
+    if(ANDROID OR SDL_PTHREADS_PRIVATE)
       # the android libc provides built-in support for pthreads, so no
       # additional linking or compile flags are necessary
     elseif(LINUX)
@@ -823,7 +865,7 @@ macro(CheckPTHREAD)
       if(CMAKE_C_COMPILER_ID MATCHES "SunPro")
         set(PTHREAD_LDFLAGS "-mt -lpthread")
       else()
-        set(PTHREAD_LDFLAGS "-pthread -lposix4")
+        set(PTHREAD_LDFLAGS "-pthread")
       endif()
     elseif(SYSV5)
       set(PTHREAD_CFLAGS "-D_REENTRANT -Kthread")
@@ -842,6 +884,9 @@ macro(CheckPTHREAD)
       set(PTHREAD_LDFLAGS "-pthread")
     elseif(QNX)
       # pthread support is baked in
+    elseif(HURD)
+      set(PTHREAD_CFLAGS "-D_REENTRANT")
+      set(PTHREAD_LDFLAGS "-pthread")
     else()
       set(PTHREAD_CFLAGS "-D_REENTRANT")
       set(PTHREAD_LDFLAGS "-lpthread")
@@ -1077,6 +1122,14 @@ endmacro()
 
 # Check for HIDAPI support
 macro(CheckHIDAPI)
+  if(ANDROID)
+    enable_language(CXX)
+    sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/android/hid.cpp")
+  endif()
+  if(IOS OR TVOS)
+    sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/ios/hid.m")
+    set(SDL_FRAMEWORK_COREBLUETOOTH 1)
+  endif()
   if(SDL_HIDAPI)
     set(HAVE_HIDAPI ON)
     if(SDL_HIDAPI_LIBUSB)
@@ -1085,7 +1138,7 @@ macro(CheckHIDAPI)
       if(LibUSB_FOUND)
         cmake_push_check_state()
         list(APPEND CMAKE_REQUIRED_LIBRARIES LibUSB::LibUSB)
-        check_c_source_compiles("
+        check_c_source_compiles_static("
           #include <stddef.h>
           #include <libusb.h>
           int main(int argc, char **argv) {
@@ -1109,14 +1162,6 @@ macro(CheckHIDAPI)
     endif()
 
     if(HAVE_HIDAPI)
-      if(ANDROID)
-        enable_language(CXX)
-        sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/android/hid.cpp")
-      endif()
-      if(IOS OR TVOS)
-        sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/ios/hid.m")
-        set(SDL_FRAMEWORK_COREBLUETOOTH 1)
-      endif()
       set(HAVE_SDL_HIDAPI TRUE)
 
       if(SDL_JOYSTICK AND SDL_HIDAPI_JOYSTICK)
@@ -1124,6 +1169,7 @@ macro(CheckHIDAPI)
         set(HAVE_SDL_JOYSTICK TRUE)
         set(HAVE_HIDAPI_JOYSTICK TRUE)
         sdl_glob_sources("${SDL3_SOURCE_DIR}/src/joystick/hidapi/*.c")
+        sdl_glob_sources("${SDL3_SOURCE_DIR}/src/haptic/hidapi/*.c")
       endif()
     else()
       set(SDL_HIDAPI_DISABLED 1)

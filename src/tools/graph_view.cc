@@ -6,6 +6,7 @@
 #include "tools/graph_view.h"
 
 #include <string>
+#include <math.h>
 
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -83,7 +84,7 @@ void tnt::tools::GraphViewTool::doGui() {
             ImNodes::BeginNodeTitleBar();
             if (entry.warpTo == UINT32_MAX) {
                 if (entry.title.empty()) {
-                    ImGui::Text("Unnamed", entry.id);
+                    ImGui::Text("Unnamed");
                 }
                 else {
                     ImGui::Text("%s", entry.title.c_str());

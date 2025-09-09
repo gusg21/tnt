@@ -133,7 +133,7 @@ perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
     int i;
     float f;
 
-    f = 1.0f/SDL_tanf(fovy * 0.5f);
+    f = 1.0f/SDL_tanf((fovy / 180.0f) * SDL_PI_F  * 0.5f);
 
     for (i = 0; i < 16; i++) {
         r[i] = 0.0;
@@ -152,7 +152,7 @@ perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
  * major. In-place multiplication is supported.
  */
 static void
-multiply_matrix(float *lhs, float *rhs, float *r)
+multiply_matrix(const float *lhs, const float *rhs, float *r)
 {
     int i, j, k;
     float tmp[16];

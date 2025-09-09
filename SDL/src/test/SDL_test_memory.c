@@ -95,7 +95,7 @@ static unsigned int get_allocation_bucket(void *mem)
     return index;
 }
 
-static SDL_tracked_allocation* SDL_GetTrackedAllocation(void *mem)
+static SDL_tracked_allocation *SDL_GetTrackedAllocation(void *mem)
 {
     SDL_tracked_allocation *entry;
     LOCK_ALLOCATOR();
@@ -216,9 +216,9 @@ static void SDL_UntrackAllocation(void *mem)
     UNLOCK_ALLOCATOR();
 }
 
-static void rand_fill_memory(void* ptr, size_t start, size_t end)
+static void rand_fill_memory(void *ptr, size_t start, size_t end)
 {
-    Uint8* mem = (Uint8*) ptr;
+    Uint8 *mem = (Uint8 *)ptr;
     size_t i;
 
     if (!s_randfill_allocations)
@@ -229,7 +229,7 @@ static void rand_fill_memory(void* ptr, size_t start, size_t end)
     }
 }
 
-static void *SDLCALL SDLTest_TrackedMalloc(size_t size)
+static void * SDLCALL SDLTest_TrackedMalloc(size_t size)
 {
     void *mem;
 
@@ -241,7 +241,7 @@ static void *SDLCALL SDLTest_TrackedMalloc(size_t size)
     return mem;
 }
 
-static void *SDLCALL SDLTest_TrackedCalloc(size_t nmemb, size_t size)
+static void * SDLCALL SDLTest_TrackedCalloc(size_t nmemb, size_t size)
 {
     void *mem;
 
@@ -252,7 +252,7 @@ static void *SDLCALL SDLTest_TrackedCalloc(size_t nmemb, size_t size)
     return mem;
 }
 
-static void *SDLCALL SDLTest_TrackedRealloc(void *ptr, size_t size)
+static void * SDLCALL SDLTest_TrackedRealloc(void *ptr, size_t size)
 {
     void *mem;
     size_t old_size = 0;
@@ -454,4 +454,5 @@ void SDLTest_LogAllocations(void)
 #undef ADD_LINE
 
     SDL_Log("%s", message);
+    SDL_free_orig(message);
 }

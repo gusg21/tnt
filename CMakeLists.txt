@@ -61,22 +61,27 @@ add_subdirectory(include)
 
 if (WIN32)
 add_executable(TNTExe WIN32 ${TNTSources} ${TNTIncludes} ${ImGuiSources} ${GladSources} ${ImNodesSources} ${ImGuiColorTextEditSources})
+else()
+add_executable(TNTExe ${TNTSources} ${TNTIncludes} ${ImGuiSources} ${GladSources} ${ImNodesSources} ${ImGuiColorTextEditSources})
 endif()
 set_property(TARGET TNTExe PROPERTY CXX_STANDARD 20)
 set_target_properties(TNTExe PROPERTIES OUTPUT_NAME "TNT")
 
 target_include_directories(TNTExe PUBLIC ${TNTIncludePath} ${ImGuiIncludePath} ${GladIncludePath} ${ImNodesIncludePath} ${ImGuiColorTextEditIncludePath} ims/)
 target_include_directories(TNTExe PUBLIC nativefiledialog/src/include/)
-target_link_directories(TNTExe PUBLIC nativefiledialog/build/lib/Debug/x64)
+# target_link_directories(TNTExe PUBLIC nativefiledialog/build/lib/Debug/x64)
 target_link_directories(TNTExe PUBLIC nativefiledialog/build/lib/Release/x64)
 target_link_libraries(TNTExe PUBLIC SDL3-static)
-if (CMAKE_BUILD_TYPE MATCHES "Release")
-	target_link_libraries(TNTExe PUBLIC nfd)
-else()
-	target_link_libraries(TNTExe PUBLIC nfd_d)
-endif()
+target_link_libraries(TNTExe PUBLIC nfd)
 target_link_libraries(TNTExe PUBLIC json-c-static)
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTK REQUIRED gtk+-3.0)
+target_link_libraries(TNTExe PUBLIC ${GTK_LIBRARIES})
+target_include_directories(TNTExe PUBLIC ${GTK_INCLUDE_DIRS})
+target_compile_options(TNTExe PUBLIC ${GTK_CFLAGS_OTHER})
+endif()
 
 add_custom_command(TARGET TNTExe POST_BUILD 
   COMMAND "${CMAKE_COMMAND}" -E copy_directory 

@@ -51,7 +51,12 @@
 #define EGL_COLOR_COMPONENT_TYPE_EXT       0x3339
 #define EGL_COLOR_COMPONENT_TYPE_FIXED_EXT 0x333A
 #define EGL_COLOR_COMPONENT_TYPE_FLOAT_EXT 0x333B
-#endif
+#endif // EGL_EXT_pixel_format_float
+
+#ifndef EGL_EXT_platform_device
+#define EGL_EXT_platform_device 1
+#define EGL_PLATFORM_DEVICE_EXT 0x313F
+#endif // EGL_EXT_platform_device
 
 #ifndef EGL_EXT_present_opaque
 #define EGL_EXT_present_opaque 1
@@ -105,17 +110,41 @@
 #define DEFAULT_OGL_ES2    "libGLESv2.so.2"
 #define DEFAULT_OGL_ES_PVR "libGLES_CM.so.1"
 #define DEFAULT_OGL_ES     "libGLESv1_CM.so.1"
+
+SDL_ELF_NOTE_DLOPEN(
+    "egl-opengl",
+    "Support for OpenGL",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    DEFAULT_OGL, ALT_OGL
+);
+SDL_ELF_NOTE_DLOPEN(
+    "egl-egl",
+    "Support for EGL",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    DEFAULT_EGL
+);
+SDL_ELF_NOTE_DLOPEN(
+    "egl-es2",
+    "Support for EGL ES2",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    DEFAULT_OGL_ES2
+);
+SDL_ELF_NOTE_DLOPEN(
+    "egl-es-pvr",
+    "Support for EGL ES PVR",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    DEFAULT_OGL_ES_PVR
+);
+SDL_ELF_NOTE_DLOPEN(
+    "egl-ogl-es",
+    "Support for OpenGL ES",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    DEFAULT_OGL_ES
+);
 #endif // SDL_VIDEO_DRIVER_RPI
 
 #if defined(SDL_VIDEO_OPENGL) && !defined(SDL_VIDEO_VITA_PVR_OGL)
 #include <SDL3/SDL_opengl.h>
-#endif
-
-/** If we happen to not have this defined because of an older EGL version, just define it 0x0
-    as eglGetPlatformDisplayEXT will most likely be NULL if this is missing
-*/
-#ifndef EGL_PLATFORM_DEVICE_EXT
-#define EGL_PLATFORM_DEVICE_EXT 0x0
 #endif
 
 #ifdef SDL_VIDEO_OPENGL
@@ -260,7 +289,7 @@ SDL_FunctionPointer SDL_EGL_GetProcAddressInternal(SDL_VideoDevice *_this, const
             result = _this->egl_data->eglGetProcAddress(proc);
         }
 
-#if !defined(SDL_PLATFORM_EMSCRIPTEN) && !defined(SDL_VIDEO_DRIVER_VITA) // LoadFunction isn't needed on Emscripten and will call dlsym(), causing other problems.
+#if !defined(SDL_VIDEO_DRIVER_VITA)
         // Try SDL_LoadFunction() first for EGL <= 1.4, or as a fallback for >= 1.5.
         if (!result) {
             result = SDL_LoadFunction(_this->egl_data->opengl_dll_handle, proc);

@@ -257,17 +257,17 @@ JNIEXPORT void JNICALL SDL_JAVA_AUDIO_INTERFACE(nativeSetupJNI)(
     JNIEnv *env, jclass jcls);
 
 JNIEXPORT void JNICALL
-    SDL_JAVA_AUDIO_INTERFACE(addAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording, jstring name,
+    SDL_JAVA_AUDIO_INTERFACE(nativeAddAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording, jstring name,
                                              jint device_id);
 
 JNIEXPORT void JNICALL
-    SDL_JAVA_AUDIO_INTERFACE(removeAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
+    SDL_JAVA_AUDIO_INTERFACE(nativeRemoveAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
                                                 jint device_id);
 
 static JNINativeMethod SDLAudioManager_tab[] = {
     { "nativeSetupJNI", "()I", SDL_JAVA_AUDIO_INTERFACE(nativeSetupJNI) },
-    { "addAudioDevice", "(ZLjava/lang/String;I)V", SDL_JAVA_AUDIO_INTERFACE(addAudioDevice) },
-    { "removeAudioDevice", "(ZI)V", SDL_JAVA_AUDIO_INTERFACE(removeAudioDevice) }
+    { "nativeAddAudioDevice", "(ZLjava/lang/String;I)V", SDL_JAVA_AUDIO_INTERFACE(nativeAddAudioDevice) },
+    { "nativeRemoveAudioDevice", "(ZI)V", SDL_JAVA_AUDIO_INTERFACE(nativeRemoveAudioDevice) }
 };
 
 // Java class SDLControllerManager
@@ -371,6 +371,7 @@ static jmethodID midShowTextInput;
 static jmethodID midSupportsRelativeMouse;
 static jmethodID midOpenFileDescriptor;
 static jmethodID midShowFileDialog;
+static jmethodID midGetPreferredLocales;
 
 // audio manager
 static jclass mAudioManagerClass;
@@ -660,6 +661,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
     midSupportsRelativeMouse = (*env)->GetStaticMethodID(env, mActivityClass, "supportsRelativeMouse", "()Z");
     midOpenFileDescriptor = (*env)->GetStaticMethodID(env, mActivityClass, "openFileDescriptor", "(Ljava/lang/String;Ljava/lang/String;)I");
     midShowFileDialog = (*env)->GetStaticMethodID(env, mActivityClass, "showFileDialog", "([Ljava/lang/String;ZZI)Z");
+    midGetPreferredLocales = (*env)->GetStaticMethodID(env, mActivityClass, "getPreferredLocales", "()Ljava/lang/String;");
 
     if (!midClipboardGetText ||
         !midClipboardHasText ||
@@ -691,7 +693,8 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
         !midShowTextInput ||
         !midSupportsRelativeMouse ||
         !midOpenFileDescriptor ||
-        !midShowFileDialog) {
+        !midShowFileDialog ||
+        !midGetPreferredLocales) {
         __android_log_print(ANDROID_LOG_WARN, "SDL", "Missing some Java callbacks, do you have the latest version of SDLActivity.java?");
     }
 
@@ -751,6 +754,8 @@ JNIEXPORT void JNICALL SDL_JAVA_CONTROLLER_INTERFACE(nativeSetupJNI)(JNIEnv *env
 typedef int (*SDL_main_func)(int argc, char *argv[]);
 
 static int run_count = 0;
+static bool allow_recreate_activity;
+static bool allow_recreate_activity_set;
 
 JNIEXPORT int JNICALL SDL_JAVA_INTERFACE(nativeCheckSDLThreadCounter)(
     JNIEnv *env, jclass jcls)
@@ -760,10 +765,16 @@ JNIEXPORT int JNICALL SDL_JAVA_INTERFACE(nativeCheckSDLThreadCounter)(
     return tmp;
 }
 
+void Android_SetAllowRecreateActivity(bool enabled)
+{
+    allow_recreate_activity = enabled;
+    allow_recreate_activity_set = true;
+}
+
 JNIEXPORT jboolean JNICALL SDL_JAVA_INTERFACE(nativeAllowRecreateActivity)(
     JNIEnv *env, jclass jcls)
 {
-    return SDL_GetHintBoolean(SDL_HINT_ANDROID_ALLOW_RECREATE_ACTIVITY, false);
+    return allow_recreate_activity;
 }
 
 JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeInitMainThread)(
@@ -1069,13 +1080,14 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeAddTouch)(
 {
     const char *utfname = (*env)->GetStringUTFChars(env, name, NULL);
 
-    SDL_AddTouch((SDL_TouchID)touchId, SDL_TOUCH_DEVICE_DIRECT, utfname);
+    SDL_AddTouch(Android_ConvertJavaTouchID(touchId),
+            SDL_TOUCH_DEVICE_DIRECT, utfname);
 
     (*env)->ReleaseStringUTFChars(env, name, utfname);
 }
 
 JNIEXPORT void JNICALL
-SDL_JAVA_AUDIO_INTERFACE(addAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
+SDL_JAVA_AUDIO_INTERFACE(nativeAddAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
                                          jstring name, jint device_id)
 {
 #if ALLOW_MULTIPLE_ANDROID_AUDIO_DEVICES
@@ -1091,7 +1103,7 @@ SDL_JAVA_AUDIO_INTERFACE(addAudioDevice)(JNIEnv *env, jclass jcls, jboolean reco
 }
 
 JNIEXPORT void JNICALL
-SDL_JAVA_AUDIO_INTERFACE(removeAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
+SDL_JAVA_AUDIO_INTERFACE(nativeRemoveAudioDevice)(JNIEnv *env, jclass jcls, jboolean recording,
                                             jint device_id)
 {
 #if ALLOW_MULTIPLE_ANDROID_AUDIO_DEVICES
@@ -1526,6 +1538,14 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetenv)(
     // Note that we call setenv() directly to avoid affecting SDL environments
     setenv(utfname, utfvalue, 1); // This should NOT be SDL_setenv()
 
+    if (SDL_strcmp(utfname, SDL_HINT_ANDROID_ALLOW_RECREATE_ACTIVITY) == 0) {
+        // Special handling for this hint, which needs to persist outside the normal application flow
+        // Only set this the first time we run, in case it's been set by the application via SDL_SetHint()
+        if (!allow_recreate_activity_set) {
+            Android_SetAllowRecreateActivity(SDL_GetStringBoolean(utfvalue, false));
+        }
+    }
+
     (*env)->ReleaseStringUTFChars(env, name, utfname);
     (*env)->ReleaseStringUTFChars(env, value, utfvalue);
 }
@@ -1625,7 +1645,7 @@ SDL_DisplayOrientation Android_JNI_GetDisplayCurrentOrientation(void)
     return displayCurrentOrientation;
 }
 
-void Android_JNI_MinizeWindow(void)
+void Android_JNI_MinimizeWindow(void)
 {
     JNIEnv *env = Android_JNI_GetEnv();
     (*env)->CallStaticVoidMethod(env, mActivityClass, midMinimizeWindow);
@@ -1807,7 +1827,10 @@ size_t Android_JNI_FileRead(void *userdata, void *buffer, size_t size, SDL_IOSta
     const int bytes = AAsset_read((AAsset *)userdata, buffer, size);
     if (bytes < 0) {
         SDL_SetError("AAsset_read() failed");
+        *status = SDL_IO_STATUS_ERROR;
         return 0;
+    } else if (bytes < size) {
+        *status = SDL_IO_STATUS_EOF;
     }
     return (size_t)bytes;
 }
@@ -1815,6 +1838,7 @@ size_t Android_JNI_FileRead(void *userdata, void *buffer, size_t size, SDL_IOSta
 size_t Android_JNI_FileWrite(void *userdata, const void *buffer, size_t size, SDL_IOStatus *status)
 {
     SDL_SetError("Cannot write to Android package filesystem");
+    *status = SDL_IO_STATUS_ERROR;
     return 0;
 }
 
@@ -1832,6 +1856,65 @@ bool Android_JNI_FileClose(void *userdata)
 {
     AAsset_close((AAsset *)userdata);
     return true;
+}
+
+bool Android_JNI_EnumerateAssetDirectory(const char *path, SDL_EnumerateDirectoryCallback cb, void *userdata)
+{
+    SDL_assert(path != NULL);
+
+    if (!asset_manager) {
+        Internal_Android_Create_AssetManager();
+        if (!asset_manager) {
+            return SDL_SetError("Couldn't create asset manager");
+        }
+    }
+
+    AAssetDir *adir = AAssetManager_openDir(asset_manager, path);
+    if (!adir) {
+        return SDL_SetError("AAssetManager_openDir failed");
+    }
+
+    SDL_EnumerationResult result = SDL_ENUM_CONTINUE;
+    const char *ent;
+    while ((result == SDL_ENUM_CONTINUE) && ((ent = AAssetDir_getNextFileName(adir)) != NULL)) {
+        result = cb(userdata, path, ent);
+    }
+
+    AAssetDir_close(adir);
+
+    return (result != SDL_ENUM_FAILURE);
+}
+
+bool Android_JNI_GetAssetPathInfo(const char *path, SDL_PathInfo *info)
+{
+    if (!asset_manager) {
+        Internal_Android_Create_AssetManager();
+        if (!asset_manager) {
+            return SDL_SetError("Couldn't create asset manager");
+        }
+    }
+
+    // this is sort of messy, but there isn't a stat()-like interface to the Assets.
+    AAsset *aasset = AAssetManager_open(asset_manager, path, AASSET_MODE_UNKNOWN);
+    if (aasset) {  // it's a file!
+        info->type = SDL_PATHTYPE_FILE;
+        info->size = (Uint64) AAsset_getLength64(aasset);
+        AAsset_close(aasset);
+        return true;
+    }
+
+    AAssetDir *adir = AAssetManager_openDir(asset_manager, path);
+    if (adir) {  // This does _not_ return NULL for a missing directory! Treat empty directories as missing. Better than nothing.  :/
+        const bool contains_something = (AAssetDir_getNextFileName(adir) != NULL);  // if not NULL, there are files in this directory, so it's _definitely_ a directory.
+        AAssetDir_close(adir);
+        if (contains_something) {
+            info->type = SDL_PATHTYPE_DIRECTORY;
+            info->size = 0;
+            return true;
+        }
+    }
+
+    return SDL_SetError("Couldn't open asset '%s'", path);
 }
 
 bool Android_JNI_SetClipboardText(const char *text)
@@ -2569,65 +2652,22 @@ bool Android_JNI_ShowToast(const char *message, int duration, int gravity, int x
 
 bool Android_JNI_GetLocale(char *buf, size_t buflen)
 {
-    AConfiguration *cfg;
-
-    SDL_assert(buflen > 6);
-
-    // Need to re-create the asset manager if locale has changed (SDL_EVENT_LOCALE_CHANGED)
-    Internal_Android_Destroy_AssetManager();
-
-    if (!asset_manager) {
-        Internal_Android_Create_AssetManager();
-    }
-
-    if (!asset_manager) {
-        return false;
-    }
-
-    cfg = AConfiguration_new();
-    if (!cfg) {
-        return false;
-    }
-
-    {
-        char language[2] = {};
-        char country[2] = {};
-        size_t id = 0;
-
-        AConfiguration_fromAssetManager(cfg, asset_manager);
-        AConfiguration_getLanguage(cfg, language);
-        AConfiguration_getCountry(cfg, country);
-
-        // Indonesian is "id" according to ISO 639.2, but on Android is "in" because of Java backwards compatibility
-        if (language[0] == 'i' && language[1] == 'n') {
-            language[1] = 'd';
-        }
-
-        // copy language (not null terminated)
-        if (language[0]) {
-            buf[id++] = language[0];
-            if (language[1]) {
-                buf[id++] = language[1];
+    bool result = false;
+    if (buf && buflen > 0) {
+        *buf = '\0';
+        JNIEnv *env = Android_JNI_GetEnv();
+        jstring string = (jstring)(*env)->CallStaticObjectMethod(env, mActivityClass, midGetPreferredLocales);
+        if (string) {
+            const char *utf8string = (*env)->GetStringUTFChars(env, string, NULL);
+            if (utf8string) {
+                result = true;
+                SDL_strlcpy(buf, utf8string, buflen);
+                (*env)->ReleaseStringUTFChars(env, string, utf8string);
             }
+            (*env)->DeleteLocalRef(env, string);
         }
-
-        buf[id++] = '_';
-
-        // copy country (not null terminated)
-        if (country[0]) {
-            buf[id++] = country[0];
-            if (country[1]) {
-                buf[id++] = country[1];
-            }
-        }
-
-        buf[id++] = '\0';
-        SDL_assert(id <= buflen);
     }
-
-    AConfiguration_delete(cfg);
-
-    return true;
+    return result;
 }
 
 bool Android_JNI_OpenURL(const char *url)
@@ -2715,7 +2755,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(onNativeFileDialog)(
 
         // Convert fileList to string
         size_t count = (*env)->GetArrayLength(env, fileList);
-        char **charFileList = SDL_calloc(count + 1, sizeof(char*));
+        char **charFileList = SDL_calloc(count + 1, sizeof(char *));
 
         if (charFileList == NULL) {
             mAndroidFileDialogData.callback(mAndroidFileDialogData.userdata, NULL, -1);
@@ -2771,7 +2811,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(onNativeFileDialog)(
 }
 
 bool Android_JNI_OpenFileDialog(
-    SDL_DialogFileCallback callback, void* userdata,
+    SDL_DialogFileCallback callback, void *userdata,
     const SDL_DialogFileFilter *filters, int nfilters, bool forwrite,
     bool multiple)
 {

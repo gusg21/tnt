@@ -118,6 +118,7 @@ typedef enum SDL_GamepadType
     SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT,
     SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT,
     SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR,
+    SDL_GAMEPAD_TYPE_GAMECUBE,
     SDL_GAMEPAD_TYPE_COUNT
 } SDL_GamepadType;
 
@@ -127,8 +128,9 @@ typedef enum SDL_GamepadType
  * For controllers that use a diamond pattern for the face buttons, the
  * south/east/west/north buttons below correspond to the locations in the
  * diamond pattern. For Xbox controllers, this would be A/B/X/Y, for Nintendo
- * Switch controllers, this would be B/A/Y/X, for PlayStation controllers this
- * would be Cross/Circle/Square/Triangle.
+ * Switch controllers, this would be B/A/Y/X, for GameCube controllers this
+ * would be A/X/B/Y, for PlayStation controllers this would be
+ * Cross/Circle/Square/Triangle.
  *
  * For controllers that don't use a diamond pattern for the face buttons, the
  * south/east/west/north buttons indicate the buttons labeled A, B, C, D, or
@@ -163,14 +165,14 @@ typedef enum SDL_GamepadButton
     SDL_GAMEPAD_BUTTON_DPAD_LEFT,
     SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
     SDL_GAMEPAD_BUTTON_MISC1,           /**< Additional button (e.g. Xbox Series X share button, PS5 microphone button, Nintendo Switch Pro capture button, Amazon Luna microphone button, Google Stadia capture button) */
-    SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1,   /**< Upper or primary paddle, under your right hand (e.g. Xbox Elite paddle P1) */
-    SDL_GAMEPAD_BUTTON_LEFT_PADDLE1,    /**< Upper or primary paddle, under your left hand (e.g. Xbox Elite paddle P3) */
-    SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2,   /**< Lower or secondary paddle, under your right hand (e.g. Xbox Elite paddle P2) */
-    SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,    /**< Lower or secondary paddle, under your left hand (e.g. Xbox Elite paddle P4) */
+    SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1,   /**< Upper or primary paddle, under your right hand (e.g. Xbox Elite paddle P1, DualSense Edge RB button, Right Joy-Con SR button) */
+    SDL_GAMEPAD_BUTTON_LEFT_PADDLE1,    /**< Upper or primary paddle, under your left hand (e.g. Xbox Elite paddle P3, DualSense Edge LB button, Left Joy-Con SL button) */
+    SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2,   /**< Lower or secondary paddle, under your right hand (e.g. Xbox Elite paddle P2, DualSense Edge right Fn button, Right Joy-Con SL button) */
+    SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,    /**< Lower or secondary paddle, under your left hand (e.g. Xbox Elite paddle P4, DualSense Edge left Fn button, Left Joy-Con SR button) */
     SDL_GAMEPAD_BUTTON_TOUCHPAD,        /**< PS4/PS5 touchpad button */
     SDL_GAMEPAD_BUTTON_MISC2,           /**< Additional button */
-    SDL_GAMEPAD_BUTTON_MISC3,           /**< Additional button */
-    SDL_GAMEPAD_BUTTON_MISC4,           /**< Additional button */
+    SDL_GAMEPAD_BUTTON_MISC3,           /**< Additional button (e.g. Nintendo GameCube left trigger click) */
+    SDL_GAMEPAD_BUTTON_MISC4,           /**< Additional button (e.g. Nintendo GameCube right trigger click) */
     SDL_GAMEPAD_BUTTON_MISC5,           /**< Additional button */
     SDL_GAMEPAD_BUTTON_MISC6,           /**< Additional button */
     SDL_GAMEPAD_BUTTON_COUNT
@@ -1156,10 +1158,12 @@ extern SDL_DECLSPEC bool SDLCALL SDL_GamepadHasAxis(SDL_Gamepad *gamepad, SDL_Ga
  * return a negative value. Note that this differs from the value reported by
  * the lower-level SDL_GetJoystickAxis(), which normally uses the full range.
  *
+ * Note that for invalid gamepads or axes, this will return 0. Zero is also a
+ * valid value in normal operation; usually it means a centered axis.
+ *
  * \param gamepad a gamepad.
  * \param axis an axis index (one of the SDL_GamepadAxis values).
- * \returns axis state (including 0) on success or 0 (also) on failure; call
- *          SDL_GetError() for more information.
+ * \returns axis state.
  *
  * \since This function is available since SDL 3.2.0.
  *
