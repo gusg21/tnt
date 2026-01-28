@@ -236,7 +236,8 @@ void tnt::tools::GraphViewTool::doMenuGui() {
 
         if (ImGui::MenuItem("Open...")) {
             char* openPath;
-            int result = NFD_OpenDialog("json", app->getLastJsonPath().c_str(), &openPath);
+            nfdfilteritem_t filter[1] = {{"TNT JSON", "json"}};
+            int result = NFD_OpenDialog(&openPath, filter, 1, app->getLastJsonPath().c_str());
             if (result == NFD_OKAY) {
                 const char* jsonText = static_cast<const char*>(SDL_LoadFile(openPath, NULL));
                 json_object* json = json_tokener_parse(jsonText);
@@ -263,7 +264,8 @@ void tnt::tools::GraphViewTool::doMenuGui() {
             const char* jsonText = json_object_to_json_string(json);
             size_t jsonTextLength = SDL_strlen(jsonText);
             char* savePathRaw;
-            int result = NFD_SaveDialog("json", app->getLastJsonPath().c_str(), &savePathRaw);
+            nfdfilteritem_t filter[1] = {{"TNT JSON", "json"}};
+            int result = NFD_SaveDialog(&savePathRaw, filter, 1, app->getLastJsonPath().c_str(), NULL );
             if (result == NFD_OKAY) {
                 std::string savePath{ savePathRaw };
                 if (!savePath.ends_with(".json")) {

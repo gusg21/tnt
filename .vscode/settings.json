@@ -3,5 +3,6 @@
         "activityBar.background": "#610603",
         "titleBar.activeBackground": "#870905",
         "titleBar.activeForeground": "#FFFBFB"
-    }
+    },
+    "cmake.generator": "Unix Makefiles"
 }

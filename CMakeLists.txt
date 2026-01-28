@@ -55,6 +55,7 @@ set(SDL_SHARED OFF)
 add_subdirectory(SDL)
 
 add_subdirectory(json-c)
+add_subdirectory(nativefiledialog)
 
 add_subdirectory(src)
 add_subdirectory(include)
