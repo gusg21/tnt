@@ -68,6 +68,10 @@ endif()
 set_property(TARGET TNTExe PROPERTY CXX_STANDARD 20)
 set_target_properties(TNTExe PROPERTIES OUTPUT_NAME "TNT")
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+target_compile_options(TNTExe PUBLIC -static-libstdc++)
+endif()
+
 target_include_directories(TNTExe PUBLIC ${TNTIncludePath} ${ImGuiIncludePath} ${GladIncludePath} ${ImNodesIncludePath} ${ImGuiColorTextEditIncludePath} ims/)
 target_include_directories(TNTExe PUBLIC nativefiledialog/src/include/)
 # target_link_directories(TNTExe PUBLIC nativefiledialog/build/lib/Debug/x64)
