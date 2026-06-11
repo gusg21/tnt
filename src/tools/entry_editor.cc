@@ -104,6 +104,9 @@ void tnt::tools::EntryEditorTool::doGui() {
                     // Option name.
                     ImGui::InputText("Name", &option.name);
 
+                    // Always present?
+                    ImGui::Checkbox("Always Present?", &option.alwaysPresent);
+
                     // Show conditionals.
                     if (ImGui::CollapsingHeader("Conditionals")) {
                         if (ImGui::Button(ICON_MS_ADD " Add Conditional")) {

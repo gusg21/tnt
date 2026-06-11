@@ -62,6 +62,7 @@ void tnt::tools::GraphViewTool::doGui() {
         ImGui::EndPopup();
     }
 
+    bool clearSelection = false;
     ImNodes::BeginNodeEditor();
 
     for (TNTEntry& entry : app->getTntData().entries) {
@@ -128,6 +129,8 @@ void tnt::tools::GraphViewTool::doGui() {
 
         if (ImGui::IsItemHovered()) {
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                clearSelection = true;
+
                 bool existingTool = false;
                 for (Tool* tool : app->getTools()) {
                     if (tool->isEditingEntry(entry.id)) {
@@ -160,6 +163,8 @@ void tnt::tools::GraphViewTool::doGui() {
     // Check if the editor is focused.
     bool inScope = ImGui::IsWindowFocused();
     ImNodes::EndNodeEditor();
+
+    if (clearSelection) ImNodes::ClearNodeSelection();
 
     bool deletePressed = ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace);
     if (inScope && deletePressed) {
@@ -202,6 +207,8 @@ void tnt::tools::GraphViewTool::doGui() {
                 .speakerName = defaultSpeaker
             }
         );
+        ImNodes::SetNodeScreenSpacePos(nextId, ImVec2(100, 100));
+
         nextId ++;
     }
 

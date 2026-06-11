@@ -134,6 +134,7 @@ void tnt::TNTOption::toJson(json_object* object) const {
         condition.toJson(conditionObject);
         json_object_array_add(conditionsArray, conditionObject);
     }
+    json_object_object_add(object, "AlwaysPresent", json_object_new_boolean(alwaysPresent));
 }
 
 void tnt::TNTOption::fromJson(json_object* object) {
@@ -148,6 +149,12 @@ void tnt::TNTOption::fromJson(json_object* object) {
             conditional.fromJson(json_object_array_get_idx(conditionsArray, i));
             enabledCheck.push_back(conditional);
         }
+    }
+    json_object* apBool;
+    if (json_object_object_get_ex(object, "AlwaysPresent", &apBool)) {
+        alwaysPresent = json_object_get_boolean(apBool);
+    } else {
+        alwaysPresent = false;
     }
 }
 

@@ -26,6 +26,7 @@ namespace tnt {
         uint32_t id = UINT32_MAX; // Entry to go to.
         std::string name = "New Option"; // Option text.
         std::vector<TNTConditional> enabledCheck; // The check to see if this option is enabled.
+        bool alwaysPresent = false;
 
         void fromJson(json_object* object);
         void toJson(json_object* object) const;
